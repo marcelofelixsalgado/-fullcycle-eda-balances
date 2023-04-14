@@ -6,7 +6,10 @@ import (
 	"fmt"
 
 	"github.com.br/marcelofelixsalgado/fullcycle-eda-balances/internal/database"
+	getbalance "github.com.br/marcelofelixsalgado/fullcycle-eda-balances/internal/usecase/get_balance"
 	updatebalance "github.com.br/marcelofelixsalgado/fullcycle-eda-balances/internal/usecase/update_balance"
+	"github.com.br/marcelofelixsalgado/fullcycle-eda-balances/internal/web"
+	"github.com.br/marcelofelixsalgado/fullcycle-eda-balances/internal/web/webserver"
 	"github.com.br/marcelofelixsalgado/fullcycle-eda-balances/pkg/kafka"
 
 	ckafka "github.com/confluentinc/confluent-kafka-go/kafka"
@@ -47,6 +50,14 @@ func main() {
 
 	balanceDb := database.NewBalanceDB(db)
 	updateBalanceUseCase := updatebalance.NewUpdateBalanceUseCase(balanceDb)
+	getBalanceUseCase := getbalance.NewGetBalanceUseCase(balanceDb)
+
+	webserver := webserver.NewWebServer(":3003")
+	balanceHandler := web.NewWebBalanceHandler(*getBalanceUseCase)
+	webserver.AddHandler("/balances/{id}", balanceHandler.GetBalance)
+	go webserver.Start()
+
+	fmt.Println("Server is started...")
 
 	topics := []string{"balances"}
 	configMap := ckafka.ConfigMap{
@@ -58,8 +69,6 @@ func main() {
 
 	balanceChan := make(chan *ckafka.Message)
 	go kafkaConsumer.Consume(balanceChan)
-
-	fmt.Println("Server is started...")
 
 	for msg := range balanceChan {
 
